@@ -6,13 +6,14 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-import config
+import settings
 import image
 import time
+import output
 
 
 def _read_remote_webdriver_key():
-    data = config.DEFAULT.webdriver
+    data = settings.DEFAULT.webdriver
     return str.format('{}:{}', data['user'], data['key'])
 
 
@@ -64,25 +65,26 @@ def _write_html(tag_html, output_path):
         f.write(tag_html)
 
 
-def _capture_tags(driver, tags, outputdir):
+def _capture_tags(driver, tags):
     for cid in tags:
         tags_per_campaign = tags[cid]
         # print "debug: " + str(tags_per_campaign)
-        sizes = config.DEFAULT.tagsizes
+        sizes = settings.DEFAULT.tagsizes
         for tag_size in sizes:
             tag_html = tags_per_campaign[tag_size]
             _display_tag(driver, tag_html)
 
             # Getting ready to write to files
+            dirpath = output.getpath(cid=cid, size=tag_size)
             if not os.path.exists(outputdir):
-                os.makedirs(outputdir)
+                raise IOError("Directory doesn't exist at {}".format(outputdir))
             tag_label = str("{}-{}").format(cid, tag_size)
-            output_path = os.path.join(outputdir, tag_label)
+            filepath = os.path.join(outputdir, tag_label)
 
             # TODO: Only works for iframe tags atm
             tag_element = driver.find_element_by_tag_name('iframe')
-            screenshot_element(driver, tag_element, output_path)
-            _write_html(tag_html=tag_html, output_path=output_path)
+            screenshot_element(driver, tag_element, filepath)
+            _write_html(tag_html=tag_html, output_path=filepath)
 
 
 def screenshot_element(driver, element, output_path):
@@ -112,6 +114,8 @@ def _screenshot(driver, output_path):
 
 
 def capture_tags_remotely(capabilities, tags, outputdir):
+    """Captures screenshots for tags with remote webdriver
+    """
     print "Starting browser with capabilities: {}...".format(capabilities)
     driver = setup_webdriver(remote=True, capabilities=capabilities)
 

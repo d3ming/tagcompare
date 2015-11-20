@@ -1,17 +1,17 @@
 import json
 from urllib import urlencode
 import time
-import config
+import settings
 import requests
 
 
 PL_TEST_PUBLISHER = "627"  # IHG!!
 TIMESTAMP = time.strftime("%Y%m%d-%H%M%S")
-PL_DOMAIN = config.DEFAULT.domain
+PL_DOMAIN = settings.DEFAULT.domain
 
 
 def _read_placelocal_api_headers():
-    headers = config.DEFAULT.placelocal['secret']
+    headers = settings.DEFAULT.placelocal['secret']
     return headers
 
 
@@ -55,7 +55,7 @@ def get_tags(cid):
     url = "https://{}/api/v2/campaign/{}/tags?".format(PL_DOMAIN, cid)
 
     # TODO: Note that animation time is set to 1 to make it static after 1s, but we only get last frame
-    qp = urlencode({"ispreview": 0, "isae": 0, "animationtime": 1, "usetagmacros": 0})
+    qp = urlencode({"ispreview": 0, "isae": 0, "animationtime": 0.1, "usetagmacros": 0})
     url += qp
     r = requests.get(url, headers=_read_placelocal_api_headers())
     if r.status_code != 200:

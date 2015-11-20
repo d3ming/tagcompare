@@ -4,18 +4,20 @@ import time
 import image
 import placelocal
 import webdriver
-import config
+import settings
+import output
 
 
-# TODO: Globals should get refactored into a config file
+# TODO: Globals should get refactored into a settings file
 # How long to wait for ad to load in seconds
 WAIT_TIME_PER_AD = 7
 
-TIMESTAMP = time.strftime("%Y%m%d-%H%M%S")
-OUTPUT_DIR = os.path.join("output", TIMESTAMP)
+# TODO: Remove
+#TIMESTAMP = time.strftime("%Y%m%d-%H%M%S")
+#OUTPUT_DIR = os.path.join("output", TIMESTAMP)
 
 # https://www.browserstack.com/automate/capabilities
-BROWSER_TEST_MATRIX = config.DEFAULT.matrix
+BROWSER_TEST_MATRIX = settings.DEFAULT.configs
 
 
 def testcampaign(cid):
@@ -34,26 +36,23 @@ def testcampaign(cid):
 
         configs.append(config)
         capabilities = config_data['capabilities']
-        output_dir = os.path.join(OUTPUT_DIR, config)
-        webdriver.capture_tags_remotely(capabilities, tags, output_dir)
+        #output_dir = os.path.join(OUTPUT_DIR, config)
+        webdriver.capture_tags_remotely(capabilities, tags, output.OUTPUT_DIR)
 
-    image.compare_output(OUTPUT_DIR, configs=configs)
+    image.compare_output(output.OUTPUT_DIR, configs=configs)
 
 
 def main(cids=None, pid=None):
-    if not os.path.exists(OUTPUT_DIR):
-        os.makedirs(OUTPUT_DIR)
-
     # Input is a PID (pubilsher id) or a list of CIDs (campaign Ids)
     if not cids:
         if not pid:
             raise ValueError("pid must be specified if there are no cids!")
-
         cids = placelocal.get_active_campaigns(pid)
 
+    output.makedirs()
     for cid in cids:
         testcampaign(cid)
 
 
 if __name__ == '__main__':
-    main(cids=config.DEFAULT.campaigns)
+    main(cids=settings.DEFAULT.campaigns, pid=settings.DEFAULT.publishers)

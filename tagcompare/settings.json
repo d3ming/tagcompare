@@ -13,7 +13,7 @@
     "user": "USER",
     "key": "KEY",
     "url": "REMOTE_WEBDRIVER_URL",
-    "matrix": {
+    "configs": {
       "chrome": {
         "enabled": true,
         "capabilities": {
