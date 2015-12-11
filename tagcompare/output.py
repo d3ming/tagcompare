@@ -49,6 +49,11 @@ class PathBuilder(object):
         self._parts = parts
         self.basepath = basepath
 
+    def __set_property_value(self, value, partindex):
+        if value:
+            value = str(value)
+        self._parts[partindex] = value
+
     """
     Properties
     """
@@ -67,8 +72,7 @@ class PathBuilder(object):
 
     @cid.setter
     def cid(self, value):
-        if value:
-            self._parts[ResultParts.CID] = str(value)
+        self.__set_property_value(value, partindex=ResultParts.CID)
 
     @property
     def tagsize(self):
@@ -76,8 +80,7 @@ class PathBuilder(object):
 
     @tagsize.setter
     def tagsize(self, value):
-        if value:
-            self._parts[ResultParts.TAGSIZE] = str(value)
+        self.__set_property_value(value, partindex=ResultParts.TAGSIZE)
 
     @property
     def tagtype(self):
@@ -85,8 +88,7 @@ class PathBuilder(object):
 
     @tagtype.setter
     def tagtype(self, value):
-        if value:
-            self._parts[ResultParts.TAGTYPE] = str(value)
+        self.__set_property_value(value, partindex=ResultParts.TAGTYPE)
 
     @property
     def config(self):
@@ -94,8 +96,7 @@ class PathBuilder(object):
 
     @config.setter
     def config(self, value):
-        if value:
-            self._parts[ResultParts.CONFIG] = str(value)
+        self.__set_property_value(value, partindex=ResultParts.CONFIG)
 
     @property
     def path(self):
@@ -111,6 +112,16 @@ class PathBuilder(object):
         return result
 
     @property
+    def tagpath(self):
+        """Gets the tag path (i.e. without the config name)
+        """
+        #
+        tagparts = self._parts[:]
+        tagparts[ResultParts.CONFIG] = None
+        return PathBuilder(parts=tagparts)._getpath(count=_NUM_PARTS - 1,
+                                                    allow_partial=False)
+
+    @property
     def tagimage(self):
         result = os.path.join(self._getpath(allow_partial=False),
                               self.tagname + ".png")
@@ -118,7 +129,7 @@ class PathBuilder(object):
 
     @property
     def taghtml(self):
-        result = os.path.join(self._getpath(allow_partial=False),
+        result = os.path.join(self.tagpath,
                               self.tagname + ".html")
         return result
 
@@ -142,7 +153,7 @@ class PathBuilder(object):
             p = self._parts[i]
             if not p:
                 if not allow_partial:
-                    raise ValueError("part %s is not set!" % i)
+                    raise ValueError("part {} is not set!".format(i))
                 return result
             p = str(p)
             result = os.path.join(result, p)

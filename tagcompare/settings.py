@@ -2,6 +2,8 @@ import json
 import os
 import logging
 
+from enum import IntEnum
+
 
 MODULE_NAME = "tagcompare"
 DEFAULT_FILENAME = "settings.json"
@@ -10,6 +12,15 @@ DEFAULT_COMPARE_FILENAME = "compare.json"
 
 OUTPUT_DIR = os.path.join("/tmp/", MODULE_NAME)
 LOG_LEVEL = logging.INFO
+
+
+class ImageErrorThreshold(IntEnum):
+    NONE = 0,
+    SLIGHT = 100,
+    MODERATE = 250,
+    BAD = 500,
+    SEVERE = 1000
+
 
 # Used by tests to access special conditions
 TEST_MODE = False

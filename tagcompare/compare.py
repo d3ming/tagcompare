@@ -21,17 +21,16 @@ import placelocal
 
 LOGGER = logger.Logger("compare", writefile=True).get()
 
-
-def compare_campaign(cid):
-    pb = output.create(cid=cid)
-    compare_configs(pathbuilder=pb, configs=settings.DEFAULT.configs)
+# TODO: a class should be made to track a compare job
 
 
 def compare_configs(pathbuilder, configs):
     # TODO: Should we check if configs are enabled before comparing?
-    assert pathbuilder, "No pathbuilder object!"
     assert configs, "No configs!"
 
+    # Always compare against default job path
+    cid = pathbuilder.cid
+    build = pathbuilder.build
     compare_build = output.DEFAULT_BUILD_NAME
     sizes = settings.DEFAULT.tagsizes
     types = settings.DEFAULT.tagtypes
@@ -43,16 +42,15 @@ def compare_configs(pathbuilder, configs):
     for a, b in itertools.combinations(configs, 2):
         for s in sizes:
             for t in types:
-                pba = pathbuilder.clone(build=compare_build, config=a, tagsize=s,
-                                        tagtype=t,
-                                        cid=pathbuilder.cid)
-                pbb = pathbuilder.clone(build=compare_build, config=b, tagsize=s,
-                                        tagtype=t,
-                                        cid=pathbuilder.cid)
+                pba = output.create(build=compare_build, config=a, tagsize=s,
+                                    tagtype=t, cid=cid)
+                pbb = pba.clone(config=b)
                 pba_img = pba.tagimage
                 pbb_img = pbb.tagimage
                 count += 1
-                compare_result = compare_images(pba_img, pbb_img, pathbuilder=pathbuilder)
+
+                result_pb = pba.clone(build=build)
+                compare_result = compare_images(pba_img, pbb_img, pathbuilder=result_pb)
                 if compare_result is None:
                     skipcount += 1
                 elif compare_result is False:
@@ -82,10 +80,13 @@ def compare_images(file1, file2, pathbuilder):
         # Unable to produce diff due to errors
         return False
 
-    if diff > image.ERROR_THRESHOLD:
-        __write_merged_image(file1, file2, diff, pathbuilder=pathbuilder)
+    # Write likely errors to the cidpath, otherwise write to the tagpath
+    if diff > settings.ImageErrorThreshold.MODERATE:
+        p = __write_merged_image(file1, file2, diff, outputpath=pathbuilder.cidpath)
+        LOGGER.warn("IMAGE_DIFF: %s, see %s", diff, p)
         return False
-
+    elif diff > settings.ImageErrorThreshold.SLIGHT:
+        __write_merged_image(file1, file2, diff, outputpath=pathbuilder.tagpath)
     return True
 
 
@@ -97,7 +98,7 @@ def __get_compare_name(file1, file2):
     return compare_name
 
 
-def __write_merged_image(file1, file2, diff, pathbuilder):
+def __write_merged_image(file1, file2, diff, outputpath):
     assert os.path.exists(file1), "file1 doesn't exist at path {}".format(file1)
     assert os.path.exists(file2), "file2 doesn't exist at path {}".format(file2)
     compare_name = __get_compare_name(file1, file2)
@@ -106,13 +107,15 @@ def __write_merged_image(file1, file2, diff, pathbuilder):
     mergedimg = image.merge_images(file1, file2)
     info = {"name": compare_name, "diff": diff}
     mergedimg2 = image.add_info(mergedimg, info)
-    build_dir = pathbuilder.buildpath
-    if not os.path.exists(build_dir):
-        os.makedirs(build_dir)
-    merged_path = os.path.join(build_dir, compare_name + ".png")
+
+    # comparisons are always done for the same campaign, so output to the cidpath
+    if not os.path.exists(outputpath):
+        os.makedirs(outputpath)
+    merged_path = os.path.join(outputpath, compare_name + ".png")
     if not settings.TEST_MODE:
         mergedimg2.save(open(merged_path, 'wb'))
-    LOGGER.warning("%s produced diff=%s. See %s", compare_name, diff, merged_path)
+    LOGGER.debug("IMAGE_DIFF=%s (%s). See %s", diff, compare_name, merged_path)
+    return merged_path
 
 
 def do_all_comparisons(cids=settings.DEFAULT.campaigns,
@@ -123,7 +126,6 @@ def do_all_comparisons(cids=settings.DEFAULT.campaigns,
     total_errors = 0
     total_skipped = 0
 
-    # Always compare against default job path
     if not pathbuilder:
         pathbuilder = output.create(
             build=output.generate_build_string())
@@ -149,7 +151,7 @@ def do_all_comparisons(cids=settings.DEFAULT.campaigns,
 def main(jobname=None):
     output.aggregate()
     if not jobname:
-        jobname = output.generate_build_string()
+        jobname = "compare_" + output.generate_build_string()
     pb = output.create(build=jobname)
     do_all_comparisons(cids=settings.DEFAULT.campaigns,
                        pids=settings.DEFAULT.publishers, pathbuilder=pb)

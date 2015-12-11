@@ -18,6 +18,18 @@ def __assert_correct_path(pathbuilder):
     assert str(pathbuilder.path).endswith(expectedstr)
 
 
+def __validate_pathbuilder_params(
+        pathbuilder, cid=None, config=None, tagsize=None, tagtype=None):
+    if cid:
+        assert pathbuilder.cid == cid, "cid value is not as expected!"
+    if config:
+        assert pathbuilder.config == config, "config value is not as expected!"
+    if tagsize:
+        assert pathbuilder.tagsize == tagsize, "tagsize value is not as expected!"
+    if tagtype:
+        assert pathbuilder.tagtype == tagtype, "tagtype value is not as expected!"
+
+
 def __rmbuild_and_validate(pb):
     result = pb.rmbuild()
     assert not pb.pathexists(), "Path should not exist after removal!"
@@ -37,6 +49,12 @@ def __validate_cidpath(pathbuilder):
     assert cidpath == os.path.join(pathbuilder.buildpath, str(pathbuilder.cid)), \
         "Incorrect cidpath!"
     assert os.path.exists(cidpath), "Could not get cidpath!"
+
+
+def __validate_tagpath(pathbuilder):
+    tagpath = pathbuilder.tagpath
+    assert pathbuilder.config not in tagpath, "config should not be in tagpath!"
+    assert os.path.exists(tagpath), "Could not get tagpath!"
 
 
 def __validate_buildpath(pathbuilder):
@@ -65,13 +83,20 @@ def test_pathbuilder_path():
 
     # Test we will get the right path after changing params
     pathbuilder.tagsize = "testsize1"
+    __validate_pathbuilder_params(pathbuilder, tagsize="testsize1")
     __assert_correct_path(pathbuilder)
     pathbuilder.cid = 999999  # Check that using a int instead of str for cid is OK
+    __validate_pathbuilder_params(pathbuilder, cid="999999")
     __assert_correct_path(pathbuilder)
     pathbuilder.config = "testconfig"
+    __validate_pathbuilder_params(pathbuilder, config="testconfig")
     __assert_correct_path(pathbuilder)
     pathbuilder.tagtype = "testtype1"
+    __validate_pathbuilder_params(pathbuilder, tagtype="testtype1")
     __assert_correct_path(pathbuilder)
+
+    with pytest.raises(AttributeError):
+        pathbuilder.build = "testbuild1"
 
 
 def test_aggregate():
@@ -208,6 +233,11 @@ def test_pathbuilder_get_path():
     assert pb.path == pb2.path, "first path part should wins!"
     with pytest.raises(ValueError):
         pb._getpath(allow_partial=False)
+    pb3 = __get_pathbuilder()
+    pb3.tagsize = None
+    __validate_pathbuilder_params(pb3, tagsize=None)
+    with pytest.raises(ValueError):
+        print(pb3._getpath(allow_partial=False))
 
 
 def test_generate_build_string():

@@ -5,7 +5,6 @@
     "chrome_beta": [ "chrome", "chrome_beta" ],
     "firefox_os": [ "firefox", "firefox_osx", "firefox_xp", "firefox_win10" ],
     "chrome_os": [ "chrome", "chrome_osx", "chrome_xp", "chrome_win10" ],
-    "ie9": [ "chrome", "ie9" ],
     "ie11": [ "chrome", "ie11" ],
     "safari": [ "chrome", "safari"]
   },

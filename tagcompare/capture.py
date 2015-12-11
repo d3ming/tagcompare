@@ -77,7 +77,7 @@ def __capture_tag(pathbuilder, tags_per_campaign, driver,
     # Check if we already have the files from default path
     default_pb = pathbuilder.clone(build=output.DEFAULT_BUILD_NAME)
     if default_pb.pathexists() and not capture_existing:
-        LOGGER.warn("Skipping existing captures %s", default_pb.path)
+        LOGGER.debug("Skipping existing captures %s", default_pb.path)
         return None
 
     try:
@@ -145,7 +145,7 @@ def main(cids=settings.DEFAULT.campaigns, pids=settings.DEFAULT.publishers, buil
     :return:
     """
     if not build:
-        build = output.generate_build_string()
+        build = "capture_" + output.generate_build_string()
     pathbuilder = output.create(build=build)
     cids = placelocal.get_cids(cids=cids, pids=pids)
     output.aggregate()

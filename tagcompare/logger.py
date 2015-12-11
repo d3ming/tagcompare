@@ -50,7 +50,7 @@ class Logger(object):
 
     def __stream_handler(self):
         handler = logging.StreamHandler()
-        formatter = logging.Formatter('%(levelname)s:%(name)s %(message)s')
+        formatter = logging.Formatter('%(levelname)s: %(message)s')
         handler.setFormatter(formatter)
         handler.setLevel(settings.LOG_LEVEL)
         return handler
