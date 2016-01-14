@@ -148,8 +148,13 @@ class PathBuilder(object):
     Functions
     """
 
-    def _getpath(self, count=_NUM_PARTS, allow_partial=False):
-        result = self.basepath
+    def get_rel_path(self):
+        return self._getpath(basepath="")
+
+    def _getpath(self, basepath=None, count=_NUM_PARTS, allow_partial=False):
+        if basepath is None:
+            basepath = self.basepath
+        result = basepath
         for i in range(0, count):
             p = self._parts[i]
             if not p:

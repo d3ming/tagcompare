@@ -1,6 +1,6 @@
 {
   "comparisons": {
-    "latest": [ "chrome", "firefox", "ie11", "safari" ],
+    "latest": [ "chrome", "firefox", "ie11" ],
     "firefox_beta": [ "firefox", "firefox_beta" ],
     "chrome_beta": [ "chrome", "chrome_beta" ],
     "firefox_os": [ "firefox", "firefox_osx", "firefox_xp", "firefox_win10" ],

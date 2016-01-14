@@ -149,7 +149,7 @@ def __capture_tags(capabilities, tags, pathbuilder,
     return browser_errors
 
 
-def main():
+def main(buildname=None, cids=None):
     """
     Runs capture, returns the job name for the capture job
     :param cids:
@@ -157,18 +157,22 @@ def main():
     :return:
     """
 
-    original_build = output.generate_build_string()
-    build = "capture_" + original_build
+    if not buildname:
+        buildname = output.generate_build_string()
+
+    build = "capture_" + buildname
     pathbuilder = output.create(build=build)
-    cids = placelocal.get_cids_from_settings()
+
+    if not cids:
+        cids = placelocal.get_cids_from_settings()
     LOGGER.info("Starting capture against %s for %s campaigns: %s...",
                 settings.DEFAULT.domain,
                 len(cids), cids)
-    output.aggregate()
-
     configs = settings.DEFAULT.configs_in_comparisons()
-    __capture_tags_for_configs(cids=cids, pathbuilder=pathbuilder, configs=configs)
-    return original_build
+    errors = __capture_tags_for_configs(cids=cids, pathbuilder=pathbuilder,
+                                        configs=configs)
+    output.aggregate()
+    return errors
 
 
 if __name__ == '__main__':

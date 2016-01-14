@@ -7,6 +7,7 @@ import compare
 import settings
 import logger
 import setup
+import output
 
 
 LOGGER = logger.Logger(name="main", writefile=True).get()
@@ -107,7 +108,8 @@ def main():
         print("Stopping tagcompare on user input")
         exit(0)
 
-    jobname = capture.main()
+    buildname = output.generate_build_string()
+    jobname = capture.main(buildname=buildname)
     if not args.capture_only:
         compare.main(build=jobname)
 

@@ -57,7 +57,8 @@ setup(
         'requests',
         'pillow',
         'enum34',
-        'coveralls'
+        'coveralls',
+        'cherrypy',
     ],
     package_data={
         '': ['*.json'],
