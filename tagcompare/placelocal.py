@@ -13,22 +13,72 @@ LOGGER = logger.Logger(__name__).get()
 
 
 class PlaceLocalApi:
-    def __init__(self, domain=None, cids=[]):
+    API_PREFIX = "api/v2/"
+    def __init__(self, domain=None):
         if not domain:
             domain = settings.DEFAULT.domain
         self._domain = domain
 
-    def get(self, route):
-        url = str.format("https://{}/{}", self._domain, route)
+    def get(self, route, prefix=API_PREFIX):
+        url = str.format("https://{}/{}/{}", self._domain,
+            prefix, route)
         r = requests.get(
             url, headers=settings.DEFAULT.get_placelocal_headers())
         assert r.status_code == 200, "GET {} failed with{}".format(
             route, r.text)
         assert 'data' in r.text, "Invalid PL response - no data!"
-        return json.loads(r.text)['data']
+        text = "".join(r.text.split())  # remove all whitespaces
+        return json.loads(text)['data']
+
+    def get_creative_family(self, cid):
+        families = self._get_creative_families(cid)
+        last_id = families[-1]['id']
+        return self._get_creative_family(last_id)
+
+    def _get_creative_families(self, cid):
+        return self.get("campaign/{}/families".format(cid))
+
+    def _get_creative_family(self, cf_id):
+        return self.get(route="creativefamily/{}".format(cf_id))
+
+    def get_tags_for_campaigns(self, cids, ispreview=1):
+        """
+        Gets a set of tags for multiple campaigns:
+
+        :param cids: a list of campaign ids
+        :param ispreview: change to 1 to get preview tags, 0 by default
+        :return: a dictionary of tags with the cid as key
+        """
+        if not cids:
+            raise ValueError("cids not defined!")
+        LOGGER.debug(
+            "Get tags for %s campaigns: %s...", len(cids), cids)
+
+        tp = ThreadPool(processes=10)
+        results = {}
+        for cid in cids:
+            results[cid] = tp.apply_async(func=self.__get_tags,
+                                          args=(cid, ispreview))
+        all_tags = {}
+        for cid in results:
+            tags = results[cid].get()
+            if not tags:
+                LOGGER.warn("No tags found for cid %s" % cid)
+                continue
+            all_tags[cid] = tags
+        LOGGER.debug("get_tags_for_campaigns for cids=%s returned:\n%s",
+                     cids, all_tags)
+        return all_tags
+
+    def get_cids_from_settings(self, settings_obj=settings.DEFAULT):
+        cids = settings_obj.campaigns
+        pids = settings_obj.publishers
+        return self._get_cids(cids, pids)
+
+    """ Private functions """
 
     def __get_active_campaigns(self, pid):
-        route = "api/v2/publication/{}/campaigns?status=active".format(pid)
+        route = "publication/{}/campaigns?status=active".format(pid)
         data = self.get(route)
         campaigns = data['campaigns']
 
@@ -68,35 +118,6 @@ class PlaceLocalApi:
         tags_data = data['http_ad_tags']
         return tags_data
 
-    def get_tags_for_campaigns(self, cids, ispreview=1):
-        """
-        Gets a set of tags for multiple campaigns:
-
-        :param cids: a list of campaign ids
-        :param ispreview: change to 1 to get preview tags, 0 by default
-        :return: a dictionary of tags with the cid as key
-        """
-        if not cids:
-            raise ValueError("cids not defined!")
-        LOGGER.debug(
-            "Get tags for %s campaigns: %s...", len(cids), cids)
-
-        tp = ThreadPool(processes=10)
-        results = {}
-        for cid in cids:
-            results[cid] = tp.apply_async(func=self.__get_tags,
-                                          args=(cid, ispreview))
-        all_tags = {}
-        for cid in results:
-            tags = results[cid].get()
-            if not tags:
-                LOGGER.warn("No tags found for cid %s" % cid)
-                continue
-            all_tags[cid] = tags
-        LOGGER.debug("get_tags_for_campaigns for cids=%s returned:\n%s",
-                     cids, all_tags)
-        return all_tags
-
     def _get_pids_from_publisher(self, pid):
         if not pid:
             raise ValueError("Invalid publisher id!")
@@ -128,11 +149,6 @@ class PlaceLocalApi:
         LOGGER.debug("_get_all_pids: %s", result)
         return result
 
-    def get_cids_from_settings(self, settings_obj=settings.DEFAULT):
-        cids = settings_obj.campaigns
-        pids = settings_obj.publishers
-        return self._get_cids(cids, pids)
-
     def _get_cids(self, cids=None, pids=None):
         """
         Gets a list of campaign ids from a combinination of cids and pids
@@ -153,3 +169,10 @@ class PlaceLocalApi:
             if new_cids:
                 cids += new_cids
         return cids
+
+def test():
+    api = PlaceLocalApi(domain='www.placelocalqa.com')
+    data = api.get_creative_family(cid=148548)
+    with open('draft.json', 'w') as fp:
+        json.dump(data, fp, separators=(',', ':'))
+test()
