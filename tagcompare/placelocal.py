@@ -14,6 +14,7 @@ LOGGER = logger.Logger(__name__).get()
 
 class PlaceLocalApi:
     API_PREFIX = "api/v2/"
+
     def __init__(self, domain=None):
         if not domain:
             domain = settings.DEFAULT.domain
@@ -21,7 +22,7 @@ class PlaceLocalApi:
 
     def get(self, route, prefix=API_PREFIX):
         url = str.format("https://{}/{}/{}", self._domain,
-            prefix, route)
+                         prefix, route)
         r = requests.get(
             url, headers=settings.DEFAULT.get_placelocal_headers())
         assert r.status_code == 200, "GET {} failed with{}".format(
@@ -31,15 +32,12 @@ class PlaceLocalApi:
         return json.loads(text)['data']
 
     def get_creative_family(self, cid):
+        """
+        Gets the latest creative family (draft) for a given campaign
+        """
         families = self._get_creative_families(cid)
         last_id = families[-1]['id']
         return self._get_creative_family(last_id)
-
-    def _get_creative_families(self, cid):
-        return self.get("campaign/{}/families".format(cid))
-
-    def _get_creative_family(self, cf_id):
-        return self.get(route="creativefamily/{}".format(cf_id))
 
     def get_tags_for_campaigns(self, cids, ispreview=1):
         """
@@ -170,9 +168,8 @@ class PlaceLocalApi:
                 cids += new_cids
         return cids
 
-def test():
-    api = PlaceLocalApi(domain='www.placelocalqa.com')
-    data = api.get_creative_family(cid=148548)
-    with open('draft.json', 'w') as fp:
-        json.dump(data, fp, separators=(',', ':'))
-test()
+    def _get_creative_families(self, cid):
+        return self.get("campaign/{}/families".format(cid))
+
+    def _get_creative_family(self, cf_id):
+        return self.get(route="creativefamily/{}".format(cf_id))

@@ -62,6 +62,19 @@ class TagCapture(object):
                                            capabilities=caps)
         return cls(configname, driver, caps)
 
+    def capture_tag_url(self, tag_url, output_path, tagtype='iframe'):
+        """Captures a tag from an URL instead of HTML file
+        """
+        self._driver.get(tag_url)
+        tag_img = self._capture_tag_by_tagtype(output_path=output_path)
+        return tag_img
+
+    def _capture_tag_by_tagtype(self, output_path, tagtype='iframe'):
+        tag_element = self._driver.find_element_by_tag_name(tagtype)
+        webdriver.wait_for_tag_load(self._driver, wait_time=self._wait_time)
+        return webdriver.screenshot_element(
+            self._driver, tag_element, output_path)
+
     def capture_tag(self, tag_html, output_path, tagtype='iframe'):
         """
         Generic/public method to capture a tag

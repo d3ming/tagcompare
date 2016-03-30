@@ -92,7 +92,7 @@ def check_browser_errors(driver):
     return errors
 
 
-def wait_until_element_disappears(driver, locator):
+def __wait_until_element_disappears(driver, locator):
     try:
         WebDriverWait(driver, 5).until(
             EC.invisibility_of_element_located(locator=locator))
@@ -102,21 +102,25 @@ def wait_until_element_disappears(driver, locator):
         return
 
 
+def wait_for_tag_load(driver, wait_time=3):
+    # TODO: implementation is specific to PaperG creatives
+    # Wait until the load spinner goes away
+    load_spinner_locator = (By.CSS_SELECTOR, "img[class*='pl-loader-'")
+    __wait_until_element_disappears(driver=driver,
+                                    locator=load_spinner_locator)
+
+    # Account for animation time and add some buffer for good measure
+    time.sleep(settings.TAG_ANIMATION_TIME)
+    time.sleep(wait_time)
+
+
 def display_tag(driver, tag, wait_for_load=True, wait_time=3):
     driver.get("about:blank")  # Clear the page first
     script = _make_script(tag)
     driver.execute_script(script)
 
     if wait_for_load:
-        # TODO: implementation is specific to PaperG creatives
-        # Wait until the load spinner goes away
-        load_spinner_locator = (By.CSS_SELECTOR, "img[class*='pl-loader-'")
-        wait_until_element_disappears(driver=driver,
-                                      locator=load_spinner_locator)
-
-        # Account for animation time and add some buffer for good measure
-        time.sleep(settings.TAG_ANIMATION_TIME)
-        time.sleep(wait_time)
+        wait_for_tag_load(driver, wait_time)
 
     errors = check_browser_errors(driver)
     return errors

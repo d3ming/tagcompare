@@ -46,12 +46,11 @@ if __name__ == '__main__':
         version=git_version(),
         description='Capture and compare creative tags!',
         url='https://github.com/paperg/tagcompare',
-        packages=['tagcompare', 'tagcompare.test', 'tagtester'],
+        packages=['tagcompare', 'tagcompare.test'],
         entry_points={
             'console_scripts': [
                 'tagcapture = tagcompare.capture:main',
                 'tagcompare = tagcompare.main:main',
-                'tagtester = tagtester.main:main'
             ]
         },
         install_requires=[
