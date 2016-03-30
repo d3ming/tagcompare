@@ -15,21 +15,28 @@ LOGGER = logger.Logger(__name__).get()
 class PlaceLocalApi:
     API_PREFIX = "api/v2/"
 
-    def __init__(self, domain=None):
+    def __init__(self, domain=None, request_headers=None):
         if not domain:
             domain = settings.DEFAULT.domain
+        if not request_headers:
+            request_headers = settings.DEFAULT.get_placelocal_headers()
         self._domain = domain
+        self._request_headers = request_headers
+
+    def put(self, route, data=None, prefix=API_PREFIX):
+        url = str.format("https://{}/{}/{}", self._domain,
+                         prefix, route)
+        r = requests.put(url, data=data, headers=self._request_headers)
+        PlaceLocalApi.__validate_api_response(r, url)
+        return PlaceLocalApi.__get_response_data(r)
 
     def get(self, route, prefix=API_PREFIX):
         url = str.format("https://{}/{}/{}", self._domain,
                          prefix, route)
         r = requests.get(
-            url, headers=settings.DEFAULT.get_placelocal_headers())
-        assert r.status_code == 200, "GET {} failed with{}".format(
-            route, r.text)
-        assert 'data' in r.text, "Invalid PL response - no data!"
-        text = "".join(r.text.split())  # remove all whitespaces
-        return json.loads(text)['data']
+            url, headers=self._request_headers)
+        PlaceLocalApi.__validate_api_response(r, url)
+        return PlaceLocalApi.__get_response_data(r)
 
     def get_creative_family(self, cid):
         """
@@ -73,7 +80,22 @@ class PlaceLocalApi:
         pids = settings_obj.publishers
         return self._get_cids(cids, pids)
 
+    def submit_campaign(self, cid):
+        route = "/campaign/{}/submit".format(cid)
+        return self.put(route)
+
     """ Private functions """
+
+    @staticmethod
+    def __validate_api_response(response, url):
+        assert response.status_code == 200, "GET {} failed with {}:\n{}".format(
+            url, response.status_code, response.text)
+        assert 'data' in response.text, "Invalid PL response - no data!"
+
+    @staticmethod
+    def __get_response_data(response):
+        text = "".join(response.text.split())  # remove all whitespaces
+        return json.loads(text)['data']
 
     def __get_active_campaigns(self, pid):
         route = "publication/{}/campaigns?status=active".format(pid)
@@ -98,7 +120,7 @@ class PlaceLocalApi:
         """
         # TODO: Support different protocols
         # protocol = ['http_ad_tags', 'https_ad_tags']
-        route = "api/v2/campaign/{}/tags?".format(cid)
+        route = "campaign/{}/tags?".format(cid)
 
         # Animation time is set to 1 to make it static after 1s
         qp = urlencode(
@@ -119,7 +141,7 @@ class PlaceLocalApi:
     def _get_pids_from_publisher(self, pid):
         if not pid:
             raise ValueError("Invalid publisher id!")
-        route = "api/v2/publisher/{}/publications".format(pid)
+        route = "publisher/{}/publications".format(pid)
         data = self.get(route)
         if not data:
             return None
