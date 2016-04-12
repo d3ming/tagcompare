@@ -16,194 +16,180 @@ import tests
 
 MODULE_NAME = 'tagtester'
 OUTPUT_BASEDIR = os.path.join(settings.HOME_DIR, MODULE_NAME)
-logging.basicConfig()
-LOGGER = logging.getLogger('tagtester')
 
 DEFAULT_TEST_CONFIG = 'qa-core'
 
 
-def get_test_config(configname):
-    assert configname in tests.tests, "No test with name %s!" % (configname)
-    return tests.tests[configname]
+class TagTester(object):
+    def __init__(self, logger=None):
+        self.logger = logger or logging.getLogger('tagtester')
+        self.args = self.__parse_args()
+        self.__configure_logger(self.args.verbose)
 
+        # Get config options
+        self.test = self.get_test(self.args.test_config)
+        self.logger.info('Test config: %s', self.test)
+        self.placelocal = placelocal.PlaceLocalApi(domain=self.test['domain'])
+        pids = self.test.get('pids')
+        cids = self.test.get('cids')
+        all_cids = self.placelocal.get_all_cids(
+            pids=pids, cids=cids)
+        self.cids = all_cids
 
-def submit_campaigns(placelocal_api, cids, wait_time=60):
-    bad_campaigns = []
-    for cid in cids:
-        LOGGER.info('Re-submitting campaign %s', cid)
-        try:
-            placelocal_api.submit_campaign(cid)
-        except AssertionError as err:
-            LOGGER.warn('Failed to submit campaign %s:\n%s!', cid, err)
-            bad_campaigns.append(cid)
-            continue
+    def get_test(self, testname):
+        assert testname in tests.tests, "No test with name %s!" % (testname)
+        return tests.tests[testname]
 
-    if bad_campaigns:
-        LOGGER.warn('%s campaigns failed submission:\n%s', len(bad_campaigns),
-                    bad_campaigns)
-    # It takes a minute or two after submit for it to take effect
-    if wait_time > 0:
-        LOGGER.info('Waiting %s after submits...', wait_time)
-        time.sleep(wait_time)
+    def submit_campaigns(self, wait_time=60):
+        bad_campaigns = []
+        for cid in self.cids:
+            self.logger.info('Re-submitting campaign %s', cid)
+            try:
+                self.placelocal.submit_campaign(cid)
+            except AssertionError as err:
+                self.logger.warn('Failed to submit campaign %s:\n%s!',
+                                 cid, err, exc_info=True)
+                bad_campaigns.append(cid)
+                continue
 
+        if bad_campaigns:
+            self.logger.warn('%s campaigns failed submission:\n%s', len(bad_campaigns),
+                             bad_campaigns)
+        # It takes a minute or two after submit for it to take effect
+        if wait_time > 0:
+            self.logger.info('Waiting %s after submits...', wait_time)
+            time.sleep(wait_time)
 
-def capture_tags(config, test_cids=None):
-    LOGGER.info(
-        'Starting tagtester capture with settings: {}'.format(config))
-    test_domain = config['domain']
-    if test_cids is None:
-        test_cids = config['cids']
-    test_sizes = config['sizes']
-    test_types = config['types']
-    test_configs = config['configs']
-    preview = config['preview']
+    def capture_tags(self, pb):
+        self.logger.debug('Starting capture...')
+        # TODO: Make reasonable defaults and refactor
+        test_sizes = self.test['sizes']
+        test_types = self.test['types']
+        browser_configs = self.test.get('configs') or ['chrome']
+        preview = self.test.get('preview') or 1
 
-    build = output.generate_build_string(prefix='tagtester')
-    pb = output.create(build, basepath=OUTPUT_BASEDIR)
-    placelocal_api = placelocal.PlaceLocalApi(domain=test_domain)
+        #browser_errors = {}
+        tag_count = 0
+        for bc in browser_configs:
+            tags = self.placelocal.get_tags_for_campaigns(
+                cids=self.cids, ispreview=preview)
+            pb.config = bc
+            with closing(capture.TagCapture.from_config(bc)) as tagcapture:
+                browser_errors = tagcapture.capture_tags(tags=tags, pathbuilder=pb, tagsizes=test_sizes,
+                                                         tagtypes=test_types)
 
-    browser_errors = {}
-    tag_count = 0
-    for config in test_configs:
-        tags = placelocal_api.get_tags_for_campaigns(
-            cids=test_cids, ispreview=preview)
-        with closing(capture.TagCapture.from_config(config)) as tagcapture:
-            for cid in test_cids:
-                for s in test_sizes:
-                    for t in test_types:
-                        tag_count += 1
-                        pb.cid = cid
-                        pb.tagsize = s
-                        pb.tagtype = t
-                        pb.config = config
-                        taghtml = tags[cid][s][t]
-                        pb.create()
-                        try:
-                            browser_errors[pb.tagname] = tagcapture.capture_tag(
-                                tag_html=taghtml,
-                                output_path=pb.tagimage, tagtype=t)
-                        except Exception as ex:
-                            LOGGER.warn('Caught exception:\n%s', ex)
-                            continue
-                        LOGGER.info('Captured {}'.format(pb.tagimage))
+        if browser_errors:
+            self.logger.error('Found browser errors in {} tags:\n{}'.format(
+                len(browser_errors), browser_errors))
+        else:
+            self.logger.info(
+                'Completed capture of {} tags'.format(tag_count))
 
-    if browser_errors:
-        LOGGER.error('Found browser errors in {} tags:\n{}'.format(
-            len(browser_errors), browser_errors))
-    else:
-        LOGGER.info('Completed capture of {} tags'.format(tag_count))
-    return build
+    def compare_builds(self, build, reference='golden'):
+        """
+        Compares a build against a reference build, (by default named 'golden' build)
+        :param buildname:
+        :param golden:
+        :return:
+        """
+        compare_build = build + "_vs_" + reference
+        self.logger.info('Starting compare build: %s', compare_build)
 
+        # Compare all the tag images in the build path against the golden set
+        build_paths = output.get_all_paths(
+            buildname=build, basedir=OUTPUT_BASEDIR)
+        compare_errors = {}
 
-def compare_builds(build, reference='golden'):
-    """
-    Compares a build against a reference build, (by default named 'golden' build)
-    :param buildname:
-    :param golden:
-    :return:
-    """
-    compare_build = build + "_vs_" + reference
-    LOGGER.info('Starting compare build: %s', compare_build)
+        for bp in build_paths:
+            build_pb = output.create_from_path(bp, basepath=OUTPUT_BASEDIR)
 
-    # Compare all the tag images in the build path against the golden set
-    build_paths = output.get_all_paths(buildname=build, basedir=OUTPUT_BASEDIR)
-    compare_errors = {}
+            # The reference build is included at the root level of tagtester
+            ref_pb = build_pb.clone(
+                build=reference, basepath=os.path.dirname(__file__))
+            assert os.path.exists(
+                ref_pb.buildpath), 'Reference build not found!'
 
-    for bp in build_paths:
-        build_pb = output.create_from_path(bp, basepath=OUTPUT_BASEDIR)
+            # We can compare iff both paths exists
+            build_image = build_pb.tagimage
+            ref_image = ref_pb.tagimage
+            if not os.path.exists(build_image):
+                self.logger.warn('SKIPPING compare: path does not exist at {}'.format(
+                    build_pb.path))
+                continue
+            if not os.path.exists(ref_image):
+                self.logger.warn('SKIPPING compare: path does not exist at {}'.format(
+                    ref_pb.path))
+                # TODO: In this case we want to have the option of making new
+                # ref
+                continue
 
-        # The reference build is included at the root level of tagtester
-        ref_pb = build_pb.clone(
-            build=reference, basepath=os.path.dirname(__file__))
-        assert os.path.exists(ref_pb.buildpath), 'Reference build not found!'
+            result = image.compare(build_pb.tagimage, ref_pb.tagimage)
+            self.logger.debug('Result for %s: %s', compare_build, result)
+            if result > settings.ImageErrorLevel.SLIGHT:
+                compare_errors[build_image] = result
+                self.logger.warn('Invalid compare result for %s', build_image)
 
-        # We can compare iff both paths exists
-        build_image = build_pb.tagimage
-        ref_image = ref_pb.tagimage
-        if not os.path.exists(build_image):
-            LOGGER.warn('SKIPPING compare: path does not exist at {}'.format(
-                build_pb.path))
-            continue
-        if not os.path.exists(ref_image):
-            LOGGER.warn('SKIPPING compare: path does not exist at {}'.format(
-                ref_pb.path))
-            # TODO: In this case we want to have the option of making new ref
-            continue
+        self.logger.info('Finished compare build %s for %s images!  Found %s errors:\n%s',
+                         compare_build, len(build_paths), len(compare_errors), compare_errors)
 
-        result = image.compare(build_pb.tagimage, ref_pb.tagimage)
+    def __parse_args(self):
+        """
+        Handles parsing commandline args and set appropriate settings from them
+        :return: the key/value pair for the commandline args parsed
+        """
+        parser = argparse.ArgumentParser()
+        parser.add_argument('-b', '--compare-build',
+                            default=None,
+                            help='Specify a build name to compare with the reference set')
+        parser.add_argument('-t', '--test-config',
+                            default=DEFAULT_TEST_CONFIG,
+                            help='Select a test config to run')
 
-        # generate diff image using imagemagick
-        diff_img_name = "diff_" + build_pb.tagname
-        diff_img_path = os.path.join(
-            build_pb.buildpath, diff_img_name) + ".png"
-        image.generate_diff_img(
-            build_pb.tagimage, ref_pb.tagimage, diff_img_path)
+        parser.add_argument('-r', '--resubmit', action='store_true', default=False,
+                            help='Used to resubmit every campaign before capture')
+        parser.add_argument('-c', '--skip-capture', action='store_true', default=False,
+                            help='Skips capture')
 
-        LOGGER.debug('Result for %s: %s', compare_build, result)
-        if result > settings.ImageErrorLevel.SLIGHT:
-            compare_errors[build_image] = result
-            LOGGER.warn('Invalid compare result for %s', build_image)
+        parser.add_argument('--verbose', action='store_true', default=False,
+                            help='Enable verbose logging for debugging')
+        args = parser.parse_args()
+        self.logger.debug("tagtester params: %s", args)
+        return args
 
-    LOGGER.info('Finished compare build %s for %s images!  Found %s errors:\n%s',
-                compare_build, len(build_paths), len(compare_errors), compare_errors)
-    return True
+    def __configure_logger(self, verbose):
+        if verbose:
+            print('verbose logging mode!')
+            level = logging.DEBUG
+        else:
+            level = logging.INFO
 
+        ch = logging.StreamHandler()
+        ch.setLevel(level)
+        fh = logging.FileHandler('tagtester.log')
+        fh.setLevel(logging.DEBUG)
+        self.logger.addHandler(ch)
+        self.logger.addHandler(fh)
 
-def __parse_args():
-    """
-    Handles parsing commandline args and set appropriate settings from them
-    :return: the key/value pair for the commandline args parsed
-    """
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-b', '--compare-build',
-                        default=None,
-                        help='Specify a build name to compare with the reference set')
-    parser.add_argument('-t', '--test-config',
-                        default=DEFAULT_TEST_CONFIG,
-                        help='Select a test config to run')
+    def run(self):
+        self.logger.info(
+            'Got %s campaigns from config: %s', len(self.cids), self.cids)
 
-    parser.add_argument('-r', '--resubmit', action='store_true', default=False,
-                        help='Used to resubmit every campaign before capture')
-    parser.add_argument('-c', '--skip-capture', action='store_true', default=False,
-                        help='Skips capture')
+        if self.args.resubmit:
+            self.submit_campaigns()
 
-    parser.add_argument('--verbose', action='store_true', default=False,
-                        help='Enable verbose logging for debugging')
-    args = parser.parse_args()
-    LOGGER.debug("tagtester params: %s", args)
-    return args
+        if self.args.skip_capture:
+            self.logger.info('Skipping capture due to config option!')
+            return
 
+        if not self.args.compare_build:
+            build = output.generate_build_string(prefix=self.args.test_config)
+            pb = output.create(build, basepath=OUTPUT_BASEDIR)
+            self.capture_tags(pb=pb)
+        else:
+            build = self.args.compare_build
 
-def main():
-    args = __parse_args()
-    if args.verbose:
-        print('verbose logging mode!')
-        LOGGER.setLevel(logging.DEBUG)
-    else:
-        LOGGER.setLevel(logging.INFO)
-
-    # Get config options
-    config = get_test_config(args.test_config)
-    LOGGER.info('Test config: %s', config)
-    placelocal_api = placelocal.PlaceLocalApi(domain=config['domain'])
-    all_cids = placelocal_api.get_all_cids(
-        pids=config.get('pids'), cids=config.get('cids'))
-    LOGGER.info('Got %s campaigns from config', len(all_cids))
-
-    if args.resubmit:
-        submit_campaigns(placelocal_api, cids=all_cids)
-
-    if args.skip_capture:
-        LOGGER.info('Skipping capture due to config option!')
-        return
-
-    if not args.compare_build:
-        build = capture_tags(config=config, test_cids=all_cids)
-    else:
-        build = args.compare_build
-
-    compare_builds(build)
-
+        self.compare_builds(build)
 
 if __name__ == '__main__':
-    main()
+    tagtester = TagTester()
+    tagtester.run()

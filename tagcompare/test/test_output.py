@@ -54,12 +54,6 @@ def __validate_cidpath(pathbuilder):
     assert os.path.exists(cidpath), "Could not get cidpath!"
 
 
-def __validate_tagpath(pathbuilder):
-    tagpath = pathbuilder.tagpath
-    assert pathbuilder.config not in tagpath, "config should not be in tagpath!"
-    assert os.path.exists(tagpath), "Could not get tagpath!"
-
-
 def __validate_buildpath(pathbuilder):
     buildpath = pathbuilder.buildpath
     assert buildpath == os.path.join(pathbuilder.basepath, pathbuilder.build), \
@@ -234,9 +228,11 @@ def test_pathbuilder_equals():
 
 def test_pathbuilder_tag_filenames():
     pb = output.create(build="b", config="c", cid="c",
-                       tagsize="s", tagtype="t")
+                       tagsize="s", tagtype="t", basepath='newbase')
     assert pb.taghtml, "Could not get taghtml!"
+    assert pb.basepath in pb.taghtml
     assert pb.tagimage, "Could not get tagimage!"
+    assert pb.basepath in pb.tagimage
 
 
 def test_pathbuilder_get_path():

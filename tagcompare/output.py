@@ -111,13 +111,13 @@ class PathBuilder(object):
         return result
 
     @property
-    def tagpath(self):
+    def _tagpath(self):
         """Gets the tag path (i.e. without the config name)
         """
         #
         tagparts = self._parts[:]
         tagparts[ResultParts.CONFIG] = None
-        return PathBuilder(parts=tagparts)._getpath(count=_NUM_PARTS - 1,
+        return self._getpath(count=_NUM_PARTS - 1,
                                                     allow_partial=False)
 
     @property
@@ -129,7 +129,7 @@ class PathBuilder(object):
 
     @property
     def taghtml(self):
-        result = os.path.join(self.tagpath,
+        result = os.path.join(self._tagpath,
                               self.tagname + ".html")
         return result
 
