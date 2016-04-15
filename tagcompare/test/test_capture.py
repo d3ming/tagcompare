@@ -35,14 +35,16 @@ def test_capture_configs():
     adtypes = ["iframe"]
 
     pb = output.create(build="capture_test")
-    errors = capture._capture_tags_for_configs(cids=cids, pathbuilder=pb,
-                                               configs=configs,
-                                               tagsizes=adsizes, tagtypes=adtypes,
-                                               capture_existing=True)
+    cm = capture.CaptureManager()
+    errors = cm._capture_tags_for_configs(cids=cids, pathbuilder=pb,
+                                          configs=configs,
+                                          tagsizes=adsizes, tagtypes=adtypes,
+                                          capture_existing=True)
     assert errors, "There should be at least one error!"
     pb.rmbuild()
 
 
+@pytest.mark.integration
 def test_capture_tag():
     tc = tagcapture_phantom()
     tag_htmls = {

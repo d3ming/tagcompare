@@ -1,15 +1,11 @@
 from multiprocessing.pool import ThreadPool
 import json
 from urllib import urlencode
-import time
 
 import requests
 
 import settings
 import logger
-
-TIMESTAMP = time.strftime("%Y%m%d-%H%M%S")
-LOGGER = logger.Logger(__name__).get()
 
 
 class PlaceLocalApi:
@@ -23,6 +19,7 @@ class PlaceLocalApi:
         self._domain = domain
         self._request_headers = request_headers
         self._validate = validate
+        self.logger = logger.Logger(__name__).get()
 
     def put(self, route, data=None, prefix=API_PREFIX):
         url = str.format("https://{}/{}/{}", self._domain,
@@ -49,7 +46,7 @@ class PlaceLocalApi:
         """
         if not cids:
             raise ValueError("cids not defined!")
-        LOGGER.debug(
+        self.logger.debug(
             "Get tags for %s campaigns: %s...", len(cids), cids)
 
         tp = ThreadPool(processes=10)
@@ -61,11 +58,11 @@ class PlaceLocalApi:
         for cid in results:
             tags = results[cid].get()
             if not tags:
-                LOGGER.warn("No tags found for cid %s" % cid)
+                self.logger.warn("No tags found for cid %s" % cid)
                 continue
             all_tags[cid] = tags
-        LOGGER.debug("get_tags_for_campaigns for cids=%s returned:\n%s",
-                     cids, all_tags)
+        self.logger.debug("get_tags_for_campaigns for cids=%s returned:\n%s",
+                          cids, all_tags)
         return all_tags
 
     def get_cids_from_settings(self, settings_obj=settings.DEFAULT):
@@ -112,8 +109,8 @@ class PlaceLocalApi:
         for c in campaigns:
             cid = c['id']
             result.append(cid)
-        LOGGER.debug("Found %s active campaigns for publisher %s.  IDs: %s",
-                     len(campaigns), pid, result)
+        self.logger.debug("Found %s active campaigns for publisher %s.  IDs: %s",
+                          len(campaigns), pid, result)
         return result
 
     def __get_tags(self, cid, ispreview=1):
@@ -137,8 +134,8 @@ class PlaceLocalApi:
         route += qp
         data = self.get(route)
         if not data:
-            LOGGER.warning("No tags found for cid %s, tags data: %s", cid,
-                           data)
+            self.logger.warning("No tags found for cid %s, tags data: %s", cid,
+                                data)
             return None
 
         tags_data = data['http_ad_tags']
@@ -172,7 +169,7 @@ class PlaceLocalApi:
             else:
                 all_pids += newpids
         result = list(set(all_pids))  # unique list
-        LOGGER.debug("_get_all_pids: %s", result)
+        self.logger.debug("_get_all_pids: %s", result)
         return result
 
     def get_all_cids(self, cids=None, pids=None):
@@ -194,4 +191,6 @@ class PlaceLocalApi:
             new_cids = self.__get_active_campaigns(pid)
             if new_cids:
                 cids += new_cids
+        self.logger.debug("get_all_cids: Found %s cids from %s",
+                          len(cids), self._domain)
         return cids

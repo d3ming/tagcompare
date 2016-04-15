@@ -68,14 +68,14 @@ class TagTester(object):
         browser_configs = self.test.get('configs') or ['chrome']
         preview = self.test.get('preview') or 1
 
-        #browser_errors = {}
         tag_count = 0
         for bc in browser_configs:
             tags = self.placelocal.get_tags_for_campaigns(
                 cids=self.cids, ispreview=preview)
             pb.config = bc
             with closing(capture.TagCapture.from_config(bc)) as tagcapture:
-                browser_errors = tagcapture.capture_tags(tags=tags, pathbuilder=pb, tagsizes=test_sizes,
+                browser_errors = tagcapture.capture_tags(tags=tags, pathbuilder=pb,
+                                                         tagsizes=test_sizes,
                                                          tagtypes=test_types)
 
         if browser_errors:
@@ -130,7 +130,8 @@ class TagTester(object):
                 self.logger.warn('Invalid compare result for %s', build_image)
 
         self.logger.info('Finished compare build %s for %s images!  Found %s errors:\n%s',
-                         compare_build, len(build_paths), len(compare_errors), compare_errors)
+                         compare_build, len(build_paths),
+                         len(compare_errors), compare_errors)
 
     def __parse_args(self):
         """

@@ -37,6 +37,7 @@ class PathBuilder(object):
     """Class to store & build paths/partial paths to outputs of tagcompare
     """
     # TODO: Consider making this class immutable
+
     def __init__(self, parts, basepath=OUTPUT_DIR):
         if not basepath:
             raise ValueError("basepath is undefined!")
@@ -118,7 +119,7 @@ class PathBuilder(object):
         tagparts = self._parts[:]
         tagparts[ResultParts.CONFIG] = None
         return self._getpath(count=_NUM_PARTS - 1,
-                                                    allow_partial=False)
+                             allow_partial=False)
 
     @property
     def tagimage(self):
@@ -251,7 +252,8 @@ def get_all_paths(buildname, basedir=OUTPUT_DIR):
     In this case the build_dir is 'golden'
     """
     buildpath = os.path.join(basedir, buildname)
-    assert os.path.exists(buildpath), 'path does not exist at {}'.format(buildpath)
+    assert os.path.exists(
+        buildpath), 'path does not exist at {}'.format(buildpath)
 
     # Gets all the children dirs from the build path
     # TODO: Note that the depth is fixed at 4, which == NUM_PARTS
@@ -286,7 +288,8 @@ def _split_pathstr(pathstr, count):
 
     allparts = [p for p in allparts if p]
     if len(allparts) != count:
-        raise ValueError("path string %s doesn't have %s parts!", pathstr, count)
+        raise ValueError(
+            "path string %s doesn't have %s parts!", pathstr, count)
 
     LOGGER.debug('allparts: %s', str(allparts))
     return allparts

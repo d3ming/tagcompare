@@ -95,12 +95,13 @@ def main():
     args = __parse_params_to_settings()
 
     if args.version:
-        # This gets handled by setup.py, we just need to not run the main routine
+        # This gets handled by setup.py, we just need to not run the main
+        # routine
         print(setup.git_version())
         exit(0)
 
     __update_settings_from_args(args)
-    proceed = __query_yes_no("Start tagcompare against {} for cid={}, pids={}?"
+    proceed = __query_yes_no("Start tagcompare against {} for cids={}, pids={}?"
                              .format(settings.DEFAULT.domain,
                                      settings.DEFAULT.campaigns,
                                      settings.DEFAULT.publishers))

@@ -81,8 +81,8 @@ def test_get_tags_for_campaigns_invalid():
 
 @pytest.mark.integration
 def test_get_cids_from_publications():
-    pids = [627]
-    cids = PlApi().get_all_cids(pids=pids)
+    pids = [647]
+    cids = PlApi().get_all_cids(pids=pids, cids=None)
     assert cids, "Did not get any campaigns for pids: {}!".format(pids)
     assert len(cids) > 0, "Should have found some active campaigns!"
     print "Found {} campaigns for publishers: {}".format(len(cids), pids)

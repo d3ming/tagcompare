@@ -58,6 +58,9 @@ def __setup_remote_webdriver(capabilities):
 
     # Update capabilities
     capabilities['public'] = 'share'
+    capabilities['commandTimeout'] = 60
+    capabilities['idleTimeout'] = 60
+
     user = settings.DEFAULT.get_saucelabs_user()
     key = settings.DEFAULT.get_saucelabs_key()
     remote_webdriver_url = "http://{}:{}@ondemand.saucelabs.com:80/wd/hub".format(

@@ -13,27 +13,28 @@ import settings
 import logger
 
 
-MAX_REMOTE_JOBS = 6
-
-placelocal_api = placelocal.PlaceLocalApi()
-
-
 class TagCapture(object):
     """TagCapture uses webdriver to capture tags for campaigns"""
 
     def __init__(self, configname, driver, caps=None,
-                 wait_for_load=True, wait_time=3):
+                 wait_for_load=True, wait_time=3, placelocal_api=None):
+        self.logger = logger.Logger(name="capture", writefile=True).get()
         self._configname = configname
         self._driver = driver
         self._caps = caps
         self._wait_time = wait_time
         self._wait_for_load = wait_for_load
-        self.logger = logger.Logger(name="capture", writefile=True).get()
+        if not placelocal_api:
+            placelocal_api = placelocal.PlaceLocalApi()
         self.logger.debug('Initialized TagCapture with caps: %s', self._caps)
 
     def close(self):
-        if self._driver:
+        self.logger.debug("Closing webdriver...")
+        try:
             self._driver.quit()
+        except Exception as ex:
+            self.logger.warn(
+                "Exception closing webdriver: %s", ex, exc_info=True)
 
     @classmethod
     def from_config(cls, configname, buildname=None,
@@ -80,8 +81,7 @@ class TagCapture(object):
         self.logger.debug('capture_tag complete for %s', output_path)
         return errors
 
-    def _capture_tag(self, pathbuilder, tags_per_campaign,
-                     capture_existing=False):
+    def _capture_tag(self, pathbuilder, tags_per_campaign, capture_existing):
         """
         Captures a tag
         :param pathbuilder:
@@ -114,7 +114,8 @@ class TagCapture(object):
         num_existing_skipped = 0
         num_captured = 0
         browser_errors = []
-        self.logger.info('capture_tags for %s tags', len(tags))
+        self.logger.info('capture_tags for %s tags with driver: %s',
+                         len(tags), self.driver)
 
         for cid in tags:
             pathbuilder.cid = cid
@@ -139,9 +140,10 @@ class TagCapture(object):
                         self.logger.error("Exception while capturing tags: %s",
                                           e, exc_info=True)
                         continue
-                    finally:
-                        self.close()
+
+                    # Increment results
                     if r is None:
+                        self.logger.debug('Skipped: %s', pathbuilder.path)
                         num_existing_skipped += 1
                     elif r is False:
                         continue
@@ -181,65 +183,105 @@ class TagCapture(object):
             f.write(tag_html)
 
 
-def _capture_tags_for_configs(cids, pathbuilder,
-                              configs,
-                              tagsizes=settings.DEFAULT.tagsizes,
-                              tagtypes=settings.DEFAULT.tagtypes,
-                              capture_existing=False):
-    all_tags = placelocal_api.get_tags_for_campaigns(cids=cids)
-    if not all_tags:
-        print("No tags found to capture!")
-        return
+class CaptureManager():
+    MAX_REMOTE_JOBS = 6
 
-    print("Capturing tags for %s campaigns over %s configs", len(cids),
-          len(configs))
-    # TODO: Implement progress bar
-    errors = []
+    def __init__(self):
+        self.max_remote_jobs = 6
+        self.logger = logger.Logger(name="capture", writefile=True).get()
 
-    # multi-thread the compare part because it's slow
-    pool = ThreadPool(processes=MAX_REMOTE_JOBS)
-    captures = {}
+    def _capture_tags_for_configs(self, cids, pathbuilder,
+                                  configs,
+                                  placelocal_api=None,
+                                  tagsizes=settings.DEFAULT.tagsizes,
+                                  tagtypes=settings.DEFAULT.tagtypes,
+                                  capture_existing=True,
+                                  multithread=True):
+        # TODO: make capture_existing configurable
+        # TODO: Implement progress bar
+        # TODO: Reduce complexity
+        def __capture_configs():
+            errors = []
+            buildname = 'tagcompare_' + pathbuilder.build
+            for configname in configs:
+                pathbuilder.config = configname
+                cpb = pathbuilder.clone()
+                tagcaptures[configname] = TagCapture.from_config(
+                    configname, buildname)
+                tagcapture_args = (
+                    all_tags, cpb, tagsizes, tagtypes, capture_existing)
+                if multithread:
+                    captures[configname] = pool.apply_async(
+                        func=tagcaptures[configname].capture_tags,
+                        args=tagcapture_args)
+                else:
+                    errors += tagcaptures[configname].capture_tags(
+                        all_tags, cpb, tagsizes, tagtypes,
+                        capture_existing)
 
-    buildname = 'tagcompare_' + pathbuilder.build
-    for configname in configs:
-        tagcapture = TagCapture.from_config(configname, buildname)
-        pathbuilder.config = configname
-        cpb = pathbuilder.clone()
-        captures[configname] = pool.apply_async(func=tagcapture.capture_tags,
-                                                args=(all_tags, cpb,
-                                                      tagsizes, tagtypes,
-                                                      capture_existing))
+            if multithread:
+                for configname in captures:
+                    errors += captures[configname].get()
+            return errors
 
-    for configname in captures:
-        errors += captures[configname].get()
-    if errors:
-        print(
-            "%s found console errors:\n%s", pathbuilder.build, errors)
-    return errors
+        if not placelocal_api:
+            placelocal_api = placelocal.PlaceLocalApi()
+        all_tags = placelocal_api.get_tags_for_campaigns(cids=cids)
+        if not all_tags:
+            print("No tags found to capture!")
+            return
+
+        self.logger.info("Capturing tags for %s campaigns over %s configs", len(cids),
+                         len(configs))
+
+        # multi-thread the compare part because it's slow
+        pool = ThreadPool(processes=CaptureManager.MAX_REMOTE_JOBS)
+        captures = {}
+        tagcaptures = {}
+
+        errors = []
+        try:
+            errors = __capture_configs()
+        except Exception as ex:
+            self.logger.errors("Exception during _capture_tags_for_configs: %s",
+                               ex, exc_info=True)
+        finally:
+            if errors:
+                self.logger.warn(
+                    "%s found console errors:\n%s", pathbuilder.build, errors)
+            return errors
+
+            self.logger.info('Done with captures, closing browsers...')
+            for configname in tagcaptures:
+                tc = tagcaptures[configname]
+                tc.close()
+
+    def run(self):
+        """
+        Runs capture, returns the job name for the capture job
+        :param cids:
+        :param pids:
+        :return: the original build string
+        """
+        placelocal_api = placelocal.PlaceLocalApi()
+
+        original_build = output.generate_build_string()
+        build = "capture_" + original_build
+        pathbuilder = output.create(build=build)
+        cids = placelocal_api.get_cids_from_settings()
+        self.logger.info("Starting capture against %s for %s campaigns: %s...",
+                         settings.DEFAULT.domain, len(cids), cids)
+        output.aggregate()
+
+        configs = settings.DEFAULT.configs_in_comparisons()
+        self._capture_tags_for_configs(
+            placelocal_api=placelocal_api,
+            cids=cids, pathbuilder=pathbuilder, configs=configs)
+        return original_build
 
 
 def main():
-    """
-    Runs capture, returns the job name for the capture job
-    :param cids:
-    :param pids:
-    :return: the original build string, this gets passed along to compare.py from main.py
-    """
-
-    original_build = output.generate_build_string()
-    build = "capture_" + original_build
-    pathbuilder = output.create(build=build)
-    cids = placelocal_api.get_cids_from_settings()
-    print("Starting capture against %s for %s campaigns: %s...",
-          settings.DEFAULT.domain,
-          len(cids), cids)
-    output.aggregate()
-
-    configs = settings.DEFAULT.configs_in_comparisons()
-    _capture_tags_for_configs(
-        cids=cids, pathbuilder=pathbuilder, configs=configs)
-    return original_build
-
+    CaptureManager().run()
 
 if __name__ == '__main__':
     main()
